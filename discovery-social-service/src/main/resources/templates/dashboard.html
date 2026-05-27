@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Builder - Distributed Microservices Ecosystem</title>
+    <link rel="stylesheet" th:href="@{/css/ui.css}">
+</head>
+<body class="dashboard-page">
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <div class="brand-mark">Y</div>
+                <div>
+                    <h1>CV Builder Ecosystem</h1>
+                    <p>Microservices Architecture v1.0</p>
+                </div>
+            </div>
+            <div class="status-pill">
+                <span class="status-dot"></span>
+                Docker Containers Operational
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-shell">
+        <aside class="side-panel">
+            <section>
+                <h2>Backend Services Status</h2>
+                <div class="service-list">
+                    <div class="service-row">
+                        <span>API Gateway</span>
+                        <strong>:8080</strong>
+                    </div>
+                    <div class="service-row">
+                        <span>Identity Service</span>
+                        <strong>gRPC :9091</strong>
+                    </div>
+                    <div class="service-row">
+                        <span>CV Management</span>
+                        <strong>:8082</strong>
+                    </div>
+                    <div class="service-row highlighted">
+                        <span>Social & Feed</span>
+                        <strong>WEB :8083</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2>Distributed Event Bus</h2>
+                <div class="event-console">
+                    <p><span class="signal"></span>[Kafka Broker: Connected]</p>
+                    <span>user-registration-topic</span>
+                    <span>cv-published-topic</span>
+                </div>
+            </section>
+
+            <section class="demo-tip">
+                <strong>Demo Tip</strong>
+                <p>When a CV is published from the CV module, it is broadcasted over Kafka to appear here instantly and asynchronously.</p>
+            </section>
+        </aside>
+
+        <section class="content-panel">
+            <div class="section-heading">
+                <div>
+                    <h2>Discovered Public Profiles</h2>
+                    <p>Real-time updates powered by isolated datastores and event-driven synchronization.</p>
+                </div>
+                <div class="heading-actions">
+                    <span class="count-badge" th:text="${cvList.size() + ' Profiles Published'}">0 Profiles Published</span>
+                    <a href="/ui/cv/new" class="create-link">Forge New Public Profile</a>
+                </div>
+            </div>
+
+            <div th:if="${cvList.isEmpty()}" class="empty-state">
+                <div class="empty-icon">CV</div>
+                <h3>No Public CVs Currently Discovered</h3>
+                <p>Publish a CV by dispatching a broadcast event in the system to see records stream here automatically via Apache Kafka.</p>
+            </div>
+
+            <div class="cv-grid">
+                <article th:each="cv : ${cvList}" class="cv-card">
+                    <div>
+                        <div class="cv-card-header">
+                            <div>
+                                <h3 th:text="${cv.fullName}">Username</h3>
+                                <p th:text="${cv.title}">Professional Title</p>
+                            </div>
+                            <span th:text="'CV ID: ' + ${cv.id.substring(0,8)}">ID</span>
+                        </div>
+
+                        <p class="summary" th:text="${cv.summary}">Professional background abstract...</p>
+
+                        <div class="skills">
+                            <span th:each="skill : ${cv.skills}" th:text="${skill}">Skill</span>
+                        </div>
+
+                        <div class="profile-metrics">
+                            <span th:text="${(cv.experience == null ? 0 : cv.experience.size()) + ' Roles'}">0 Roles</span>
+                            <span th:text="${(cv.projects == null ? 0 : cv.projects.size()) + ' Projects'}">0 Projects</span>
+                            <span th:text="${(cv.languages == null ? 0 : cv.languages.size()) + ' Languages'}">0 Languages</span>
+                        </div>
+                    </div>
+
+                    <a th:href="@{'/ui/cv/' + ${cv.id}}" class="inspect-link">
+                        Inspect Profile via gRPC Security Guard
+                    </a>
+                </article>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        Designed for Advanced Software Engineering Course - IUG 2026
+    </footer>
+</body>
+</html>

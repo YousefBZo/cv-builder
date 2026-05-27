@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Details - gRPC Verification Sandbox</title>
+    <link rel="stylesheet" th:href="@{/css/ui.css}">
+</head>
+<body class="details-page">
+    <main class="details-shell">
+        <section class="verification-card">
+            <div>
+                <span>Inter-Service Synchronous Verification</span>
+                <h1 th:text="${grpcVerification}">gRPC Verification State</h1>
+            </div>
+            <strong>gRPC OK</strong>
+        </section>
+
+        <article class="profile-card">
+            <header>
+                <div>
+                    <h2 th:text="${cv.fullName}">Full Name</h2>
+                    <p th:text="${cv.title}">Professional Title</p>
+                </div>
+                <div class="profile-actions">
+                    <button type="button" onclick="window.print()">Export PDF</button>
+                    <a href="/ui/dashboard">Back to Dashboard</a>
+                </div>
+            </header>
+
+            <section>
+                <h3>Professional Summary</h3>
+                <p class="profile-summary" th:text="${cv.summary}">Summary content goes here...</p>
+            </section>
+
+            <section>
+                <h3>Validated Technical Stack</h3>
+                <div class="skills dark">
+                    <span th:each="skill : ${cv.skills}" th:text="${skill}">Skill Tag</span>
+                </div>
+            </section>
+
+            <section th:if="${cv.experience != null and !cv.experience.isEmpty()}">
+                <h3>Work Experience</h3>
+                <div class="profile-list">
+                    <article th:each="item : ${cv.experience}">
+                        <div>
+                            <strong th:text="${item.jobTitle}">Job Title</strong>
+                            <span th:text="${item.companyName}">Company Name</span>
+                        </div>
+                        <small th:text="${item.startDate + ' - ' + item.endDate}">2023 - Present</small>
+                        <p th:text="${item.responsibilities}">Responsibilities</p>
+                    </article>
+                </div>
+            </section>
+
+            <section th:if="${cv.education != null and !cv.education.isEmpty()}">
+                <h3>Education & Certifications</h3>
+                <div class="profile-list compact">
+                    <article th:each="item : ${cv.education}">
+                        <div>
+                            <strong th:text="${item.degreeLevel}">Degree Level</strong>
+                            <span th:text="${item.institution}">Institution</span>
+                        </div>
+                        <small th:text="${item.fieldOfStudy + ' | ' + item.graduationYear}">Field | Year</small>
+                    </article>
+                </div>
+            </section>
+
+            <section th:if="${cv.projects != null and !cv.projects.isEmpty()}">
+                <h3>Engineered Projects</h3>
+                <div class="profile-list">
+                    <article th:each="item : ${cv.projects}">
+                        <div>
+                            <strong th:text="${item.projectName}">Project Name</strong>
+                            <a th:if="${item.projectUrl}" th:href="${item.projectUrl}" th:text="${item.projectUrl}">Project URL</a>
+                        </div>
+                        <small th:text="${item.technicalStack}">Technical Stack</small>
+                        <p th:text="${item.architecturalSummary}">Project summary</p>
+                    </article>
+                </div>
+            </section>
+
+            <section th:if="${cv.languages != null and !cv.languages.isEmpty()}">
+                <h3>Linguistic Proficiencies</h3>
+                <div class="skills dark">
+                    <span th:each="item : ${cv.languages}" th:text="${item.languageName + ' - ' + item.fluencyTier}">Language</span>
+                </div>
+            </section>
+        </article>
+    </main>
+</body>
+</html>

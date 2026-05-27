@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Denied - Distributed Security Shield</title>
+    <link rel="stylesheet" th:href="@{/css/ui.css}">
+</head>
+<body class="error-page">
+    <main class="error-card">
+        <div class="error-mark">!</div>
+        <h1>System Access Intercepted</h1>
+        <div class="error-console">
+            <p th:text="${grpcVerification}">Intercept Status</p>
+            <p th:text="'Exception Details: ' + ${errorMessage}">Exception Message</p>
+        </div>
+        <p>The central Identity Service issued an automated blocking response frame via high-performance gRPC, preventing profile lookups because the profile owner's account status is currently suspended.</p>
+        <a href="/ui/dashboard">Return to Console</a>
+    </main>
+</body>
+</html>

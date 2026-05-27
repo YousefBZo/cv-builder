@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create CV - CV Builder</title>
+    <link rel="stylesheet" th:href="@{/css/ui.css}">
+</head>
+<body class="factory-page">
+    <main class="factory-shell wizard-shell">
+        <header class="factory-header">
+            <div>
+                <h1>Create Public CV</h1>
+                <p>Build a structured profile graph, publish it, and stream the full payload through Kafka.</p>
+            </div>
+            <a href="/ui/dashboard">Back to Dashboard</a>
+        </header>
+
+        <div th:if="${errorMessage}" class="form-error" th:text="${errorMessage}">Save error</div>
+
+        <form action="/ui/cv/save" method="post" class="cv-form wizard-form" id="cvWizard">
+            <nav class="wizard-tabs" aria-label="CV sections">
+                <button type="button" class="active" data-step="0">Personal</button>
+                <button type="button" data-step="1">Experience</button>
+                <button type="button" data-step="2">Education</button>
+                <button type="button" data-step="3">Projects</button>
+                <button type="button" data-step="4">Languages</button>
+            </nav>
+
+            <section class="wizard-step active">
+                <div class="form-grid">
+                    <label>
+                        <span>Full Name</span>
+                        <input type="text" name="fullName" required placeholder="Yousef Ahmad">
+                    </label>
+
+                    <label>
+                        <span>Professional Title</span>
+                        <input type="text" name="title" required placeholder="Distributed Systems Engineer">
+                    </label>
+                </div>
+
+                <label>
+                    <span>Professional Summary</span>
+                    <textarea name="summary" rows="5" required placeholder="Describe your background, strengths, and project experience."></textarea>
+                </label>
+
+                <label>
+                    <span>Skills</span>
+                    <input type="text" name="skills" required placeholder="Java, Spring Boot, Kafka, MySQL">
+                </label>
+            </section>
+
+            <section class="wizard-step">
+                <div class="dynamic-section" id="experienceRows">
+                    <article class="dynamic-row">
+                        <div class="form-grid">
+                            <label>
+                                <span>Company Name</span>
+                                <input type="text" name="experienceCompanyName" placeholder="IUG Lab">
+                            </label>
+                            <label>
+                                <span>Job Title</span>
+                                <input type="text" name="experienceJobTitle" placeholder="Backend Engineer">
+                            </label>
+                            <label>
+                                <span>Start Date</span>
+                                <input type="text" name="experienceStartDate" placeholder="2025-01">
+                            </label>
+                            <label>
+                                <span>End Date</span>
+                                <input type="text" name="experienceEndDate" placeholder="Present">
+                            </label>
+                        </div>
+                        <label>
+                            <span>Core Responsibilities</span>
+                            <textarea name="experienceResponsibilities" rows="3" placeholder="Designed APIs, event streams, and distributed workflows."></textarea>
+                        </label>
+                    </article>
+                </div>
+                <button type="button" class="secondary-action" data-add="experienceRows">Add Experience</button>
+            </section>
+
+            <section class="wizard-step">
+                <div class="dynamic-section" id="educationRows">
+                    <article class="dynamic-row">
+                        <div class="form-grid">
+                            <label>
+                                <span>Institution</span>
+                                <input type="text" name="educationInstitution" placeholder="Islamic University of Gaza">
+                            </label>
+                            <label>
+                                <span>Major / Field</span>
+                                <input type="text" name="educationFieldOfStudy" placeholder="Computer Science">
+                            </label>
+                            <label>
+                                <span>Degree Level</span>
+                                <input type="text" name="educationDegreeLevel" placeholder="Bachelor's">
+                            </label>
+                            <label>
+                                <span>Graduation Year</span>
+                                <input type="text" name="educationGraduationYear" placeholder="2026">
+                            </label>
+                        </div>
+                    </article>
+                </div>
+                <button type="button" class="secondary-action" data-add="educationRows">Add Education</button>
+            </section>
+
+            <section class="wizard-step">
+                <div class="dynamic-section" id="projectRows">
+                    <article class="dynamic-row">
+                        <div class="form-grid">
+                            <label>
+                                <span>Project Name</span>
+                                <input type="text" name="projectName" placeholder="CV Builder">
+                            </label>
+                            <label>
+                                <span>Technical Stack</span>
+                                <input type="text" name="projectTechnicalStack" placeholder="Spring Boot, Kafka, gRPC">
+                            </label>
+                        </div>
+                        <label>
+                            <span>Live Link / Repository URL</span>
+                            <input type="url" name="projectUrl" placeholder="https://github.com/example/cv-builder">
+                        </label>
+                        <label>
+                            <span>Brief Architectural Summary</span>
+                            <textarea name="projectArchitecturalSummary" rows="3" placeholder="Microservices resume platform with event-driven discovery projection."></textarea>
+                        </label>
+                    </article>
+                </div>
+                <button type="button" class="secondary-action" data-add="projectRows">Add Project</button>
+            </section>
+
+            <section class="wizard-step">
+                <div class="dynamic-section" id="languageRows">
+                    <article class="dynamic-row">
+                        <div class="form-grid">
+                            <label>
+                                <span>Language</span>
+                                <input type="text" name="languageName" placeholder="English">
+                            </label>
+                            <label>
+                                <span>Fluency Tier</span>
+                                <input type="text" name="languageFluencyTier" placeholder="Professional Working">
+                            </label>
+                        </div>
+                    </article>
+                </div>
+                <button type="button" class="secondary-action" data-add="languageRows">Add Language</button>
+            </section>
+
+            <div class="wizard-actions">
+                <button type="button" class="secondary-action" id="prevStep">Previous</button>
+                <button type="button" class="secondary-action" id="nextStep">Next</button>
+                <button type="submit" id="publishStep">Create and Publish CV</button>
+            </div>
+        </form>
+    </main>
+
+    <script>
+        const steps = Array.from(document.querySelectorAll(".wizard-step"));
+        const tabs = Array.from(document.querySelectorAll(".wizard-tabs button"));
+        const prev = document.getElementById("prevStep");
+        const next = document.getElementById("nextStep");
+        const publish = document.getElementById("publishStep");
+        let current = 0;
+
+        function showStep(index) {
+            current = Math.max(0, Math.min(index, steps.length - 1));
+            steps.forEach((step, stepIndex) => step.classList.toggle("active", stepIndex === current));
+            tabs.forEach((tab, tabIndex) => tab.classList.toggle("active", tabIndex === current));
+            prev.disabled = current === 0;
+            next.hidden = current === steps.length - 1;
+            publish.hidden = current !== steps.length - 1;
+        }
+
+        tabs.forEach((tab) => tab.addEventListener("click", () => showStep(Number(tab.dataset.step))));
+        prev.addEventListener("click", () => showStep(current - 1));
+        next.addEventListener("click", () => showStep(current + 1));
+
+        document.querySelectorAll("[data-add]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const container = document.getElementById(button.dataset.add);
+                const clone = container.firstElementChild.cloneNode(true);
+                clone.querySelectorAll("input, textarea").forEach((field) => field.value = "");
+                container.appendChild(clone);
+            });
+        });
+
+        showStep(0);
+    </script>
+</body>
+</html>

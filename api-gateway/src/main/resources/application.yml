@@ -1,0 +1,44 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        # 1. Identity & Access Management Routes (Identity Service)
+        - id: identity-service
+          uri: lb://identity-service
+          predicates:
+            - Path=/api/auth/**
+
+        # 2. CV Management & Builder Routes (CV Management Service)
+        - id: cv-management-service
+          uri: lb://cv-management-service
+          predicates:
+            - Path=/api/cv/**
+
+        # 3. Public Feed & Social Interaction Routes (Discovery & Social Service)
+        - id: discovery-social-service
+          uri: lb://discovery-social-service
+          predicates:
+            - Path=/api/social/**
+
+        # 4. Social Web UI Routes (Dashboard and CV Inspection Views)
+        - id: discovery-social-service-ui
+          uri: lb://discovery-social-service
+          predicates:
+            - Path=/ui/**
+
+# Eureka Registry Integration Settings
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true

@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package com.yousef.cvbuilder.identity.grpc;
+
+option java_multiple_files = true;
+option java_package = "com.yousef.cvbuilder.identity.grpc";
+
+service AuthService {
+  rpc VerifyAccount (VerifyRequest) returns (VerifyResponse);
+}
+
+message VerifyRequest {
+  string userId = 1;
+}
+
+message VerifyResponse {
+  bool isValid = 1;
+  string status = 2;
+  ProfileGraph profileGraph = 3;
+}
+
+message ProfileGraph {
+  string cvId = 1;
+  string userId = 2;
+  string title = 3;
+  string fullName = 4;
+  string summary = 5;
+  repeated string skills = 6;
+  repeated Experience experience = 7;
+  repeated Education education = 8;
+  repeated Project projects = 9;
+  repeated Language languages = 10;
+}
+
+message Experience {
+  string companyName = 1;
+  string jobTitle = 2;
+  string startDate = 3;
+  string endDate = 4;
+  string responsibilities = 5;
+}
+
+message Education {
+  string institution = 1;
+  string fieldOfStudy = 2;
+  string degreeLevel = 3;
+  string graduationYear = 4;
+}
+
+message Project {
+  string projectName = 1;
+  string technicalStack = 2;
+  string projectUrl = 3;
+  string architecturalSummary = 4;
+}
+
+message Language {
+  string languageName = 1;
+  string fluencyTier = 2;
+}

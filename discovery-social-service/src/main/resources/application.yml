@@ -1,0 +1,50 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: discovery-social-service
+
+  # Social/Discovery Database Configurations
+  datasource:
+    url: jdbc:mysql://localhost:3306/interaction_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  # Kafka Consumer Configurations
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: social-feed-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.yousef.cvbuilder.social.dto.event,com.yousef.cvbuilder.identity.event,com.yousef.cvbuilder.cvmanagement.event,com.yousef.cvbuilder.cvmanagement.entity"
+        spring.json.type.mapping: "com.yousef.cvbuilder.identity.event.UserRegisteredEvent:com.yousef.cvbuilder.social.dto.event.UserRegisteredEvent,com.yousef.cvbuilder.cvmanagement.event.CvPublishedEvent:com.yousef.cvbuilder.social.dto.event.CvPublishedEvent"
+
+# gRPC Client Routing targeting the identity microservice via Eureka
+grpc:
+  client:
+    identity-service:
+      address: 'discovery:///identity-service'
+      negotiationType: PLAINTEXT
+      enableKeepAlive: true
+      keepAliveWithoutCalls: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+app:
+  gateway-base-url: ${CV_GATEWAY_BASE_URL:http://localhost:8080}

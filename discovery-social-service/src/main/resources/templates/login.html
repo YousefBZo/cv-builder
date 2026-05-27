@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Portal - CV Builder</title>
+    <link rel="stylesheet" th:href="@{/css/ui.css}">
+</head>
+<body class="login-page">
+    <main class="login-card">
+        <div class="login-header">
+            <div class="brand-mark">Y</div>
+            <h1>Authentication Portal</h1>
+            <p>Sign in with an Identity Service account to create and publish public CV records.</p>
+        </div>
+
+        <div th:if="${errorMessage}" class="form-error" th:text="${errorMessage}">Login error</div>
+
+        <form action="/ui/login" method="post" class="auth-form">
+            <label>
+                <span>Email</span>
+                <input type="email" name="username" required placeholder="yousef@example.com">
+            </label>
+
+            <label>
+                <span>Password</span>
+                <input type="password" name="password" required placeholder="Enter password">
+            </label>
+
+            <button type="submit">Start Session</button>
+        </form>
+    </main>
+</body>
+</html>
