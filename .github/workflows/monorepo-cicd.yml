@@ -21,18 +21,33 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      services: ${{ steps.filter.outputs.changes }}
+      services: ${{ steps.matrix.outputs.services }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
+            workflow: '.github/workflows/monorepo-cicd.yml'
             api-gateway: 'api-gateway/**'
             discovery-server: 'discovery-server/**'
             identity-service: 'identity-service/**'
             cv-management-service: 'cv-management-service/**'
             discovery-social-service: 'discovery-social-service/**'
+
+      - name: Resolve Service Matrix
+        id: matrix
+        run: |
+          ALL_SERVICES='["api-gateway","discovery-server","identity-service","cv-management-service","discovery-social-service"]'
+          CHANGED_SERVICES='${{ steps.filter.outputs.changes }}'
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ steps.filter.outputs.workflow }}" = "true" ]; then
+            echo "services=${ALL_SERVICES}" >> "$GITHUB_OUTPUT"
+            echo "Building all services because this was a manual run or the workflow file changed."
+          else
+            echo "services=${CHANGED_SERVICES}" >> "$GITHUB_OUTPUT"
+            echo "Building changed services: ${CHANGED_SERVICES}"
+          fi
 
   # Stage 2: Docker Hub Credential Validation
   validate-dockerhub:
