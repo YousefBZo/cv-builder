@@ -107,6 +107,18 @@ jobs:
       - name: Build JAR Package with Maven
         run: mvn -B -pl ${{ matrix.service }} -am clean package -DskipTests
 
+      - name: Prepare Docker Build Artifact
+        run: |
+          JAR_FILE=$(find "${{ matrix.service }}/target" -maxdepth 1 -type f -name "*.jar" ! -name "*.original" | head -n 1)
+
+          if [ -z "$JAR_FILE" ]; then
+            echo "No JAR file found for ${{ matrix.service }}"
+            exit 1
+          fi
+
+          mkdir -p ".docker-build/${{ matrix.service }}"
+          cp "$JAR_FILE" ".docker-build/${{ matrix.service }}/app.jar"
+
       # 4. Securely authenticate session credentials against Docker Hub repository using GitHub Encrypted Secrets
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
@@ -117,17 +129,37 @@ jobs:
       # 5. Synthesize OCI container layers and dispatch to the remote registry with production tags (latest & unique Commit SHA)
       - name: Build and Push Docker Image
         run: |
+          retry() {
+            local max_attempts=3
+            local delay_seconds=20
+
+            for attempt in $(seq 1 "$max_attempts"); do
+              if "$@"; then
+                return 0
+              fi
+
+              if [ "$attempt" -eq "$max_attempts" ]; then
+                echo "Command failed after ${max_attempts} attempts: $*"
+                return 1
+              fi
+
+              echo "Command failed on attempt ${attempt}. Retrying in ${delay_seconds}s..."
+              sleep "$delay_seconds"
+            done
+          }
+
           # Standardize image coordinate namespaces matching user workspace parameters
           IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service }}"
 
-          # Build the immutable image artifact layers locally on the worker node
-          docker build \
+          # Build the immutable image artifact layers locally on the worker node.
+          # CI uses the JAR already produced by Maven, so Docker does not pull a Maven builder image.
+          retry docker build \
             --build-arg SERVICE_NAME=${{ matrix.service }} \
-            -f ${{ matrix.service }}/Dockerfile \
+            -f Dockerfile.ci \
             -t $IMAGE_NAME:latest \
             -t $IMAGE_NAME:${{ github.sha }} \
             .
 
           # Push built multi-tagged container records into the central Docker Hub registry
-          docker push $IMAGE_NAME:latest
-          docker push $IMAGE_NAME:${{ github.sha }}
+          retry docker push $IMAGE_NAME:latest
+          retry docker push $IMAGE_NAME:${{ github.sha }}

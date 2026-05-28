@@ -1,0 +1,12 @@
+FROM eclipse-temurin:17-jre-jammy
+WORKDIR /app
+
+ARG SERVICE_NAME
+
+RUN groupadd --system spring && useradd --system --gid spring spring
+
+COPY .docker-build/${SERVICE_NAME}/app.jar app.jar
+
+USER spring
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
