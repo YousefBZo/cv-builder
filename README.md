@@ -45,8 +45,8 @@ This is the fastest path if you only want to run the app and try it.
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
-cd cv-builder-monorepo
+git clone https://github.com/YousefBZo/cv-builder.git
+cd cv-builder
 ```
 
 1. Start Docker Desktop, then run the full stack:
@@ -272,6 +272,8 @@ Required GitHub repository secrets:
 
 - `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN`
+
+`DOCKERHUB_USERNAME` must be your Docker Hub username, not your email address. `DOCKERHUB_TOKEN` should be a Docker Hub access token created from Docker Hub account settings. If GitHub Actions shows `unauthorized: incorrect username or password`, recreate the Docker Hub access token and update this repository secret.
 
 ## Repository Layout
 
