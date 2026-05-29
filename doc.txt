@@ -1,0 +1,936 @@
+# Distributed Microservices-Based CV Builder Application
+
+Final Project Documentation
+
+Author: Yousef Basem Zaqout
+Academic ID: 120210235
+Course: Advanced Software Engineering
+Document Type: Formal Semester Project Documentation
+Project Repository: https://github.com/YousefBZo/cv-builder
+
+---
+
+## 1. Executive Summary
+
+The CV Builder project is a distributed, microservices-based web application for creating, publishing, and discovering public CV profiles. The system was implemented as a Spring Boot monorepo with five independent services, service discovery through Eureka, asynchronous communication through Apache Kafka, synchronous account verification through gRPC, persistent storage through MySQL, containerized execution through Docker Compose, and automated CI/CD through GitHub Actions and Docker Hub.
+
+The main purpose of the application is to demonstrate a complete enterprise-style architecture using real service boundaries. Instead of placing all functionality inside one monolithic application, the system separates identity management, CV lifecycle management, public discovery, gateway routing, and service registration into independent deployable units. This separation makes the system easier to reason about, easier to test, and closer to the style used in modern cloud-native applications.
+
+The application supports the following main user flow:
+
+1. A user logs in through the web interface or registers through the REST API.
+2. The user creates a structured CV with skills, experience, education, projects, and languages.
+3. The CV is saved as a draft in the CV Management Service.
+4. The CV is published and emitted as a Kafka event.
+5. The Discovery Social Service consumes the event and stores a public read model.
+6. Public CVs are shown in the dashboard and feed only if the owning account is still active.
+7. Account validity is checked in real time through gRPC before public data is returned.
+
+---
+
+## 2. Problem Statement
+
+Traditional web systems often place user identity, data management, public browsing, and interface rendering in a single application. This approach is simple at first, but it creates several problems as the system grows:
+
+- Different parts of the application cannot scale independently.
+- A failure in one feature can affect the entire platform.
+- Public read traffic can overload the same database used for writes.
+- Service ownership becomes unclear.
+- Real-time security checks become difficult when data is copied for fast reads.
+
+This project addresses those issues by using a distributed microservices architecture. Each service owns a clear responsibility and stores its own data in a separate logical database. Kafka is used to synchronize data asynchronously between services, while gRPC is used where the system needs an immediate answer, such as checking whether a CV owner account is active.
+
+---
+
+## 3. Project Objectives
+
+The project was designed and implemented to meet the following objectives:
+
+1. Build a complete Spring Boot microservices system using Java 17.
+2. Use a monorepo structure while keeping each service independently deployable.
+3. Implement service discovery with Eureka.
+4. Route external traffic through a centralized API Gateway.
+5. Use Kafka for asynchronous event-driven communication.
+6. Use gRPC for synchronous inter-service account verification.
+7. Store data in MySQL using separate logical databases per bounded context.
+8. Provide a usable Thymeleaf web interface for login, dashboard browsing, CV creation, and CV details.
+9. Containerize the full system with Docker Compose.
+10. Add automated CI/CD for changed microservices using GitHub Actions.
+11. Include unit tests and an end-to-end smoke test script.
+12. Document the architecture, design decisions, limitations, and future improvements.
+
+---
+
+## 4. Technology Stack
+
+| Layer | Technology |
+| --- | --- |
+| Programming language | Java 17 |
+| Backend framework | Spring Boot 3.2.5 |
+| Cloud framework | Spring Cloud 2023.0.1 |
+| API gateway | Spring Cloud Gateway |
+| Service discovery | Spring Cloud Netflix Eureka |
+| Persistence | Spring Data JPA, Hibernate, MySQL 8 |
+| Asynchronous messaging | Apache Kafka |
+| RPC communication | gRPC with Protocol Buffers |
+| Server-side UI | Thymeleaf |
+| Build tool | Maven multi-module project |
+| Containerization | Docker and Docker Compose |
+| CI/CD | GitHub Actions |
+| Container registry | Docker Hub |
+| Test framework | JUnit 5, Mockito, AssertJ |
+
+---
+
+## 5. High-Level Architecture
+
+The application is composed of five Spring Boot services and three supporting infrastructure containers.
+
+```text
+                        Browser / User
+                              |
+                              | HTTP
+                              v
+                       API Gateway :8080
+                              |
+         -------------------------------------------------
+         |                       |                       |
+         v                       v                       v
+ Identity Service          CV Management          Discovery Social
+   :8081, :9091              Service :8082          Service :8083
+         |                       |                       |
+         |                       |                       |
+         | UserRegisteredEvent   | CvPublishedEvent      |
+         |                       |                       |
+         ---------------------- Kafka --------------------
+                                 |
+                                 v
+                         Public read model
+
+ Discovery Social Service also calls Identity Service through gRPC
+ before returning public CV data.
+```
+
+Supporting services:
+
+| Container | Purpose |
+| --- | --- |
+| `cv-mysql` | MySQL storage for all logical databases. |
+| `cv-kafka` | Kafka broker for application events. |
+| `cv-zookeeper` | Coordination service required by the selected Kafka image. |
+
+---
+
+## 6. Monorepo Structure
+
+The repository is organized as a Maven multi-module monorepo:
+
+```text
+.
+|-- api-gateway/
+|-- cv-management-service/
+|-- discovery-server/
+|-- discovery-social-service/
+|-- identity-service/
+|-- scripts/
+|-- .github/workflows/monorepo-cicd.yml
+|-- Dockerfile.ci
+|-- docker-compose.yml
+|-- pom.xml
+|-- README.md
+`-- doc.txt
+```
+
+The root `pom.xml` defines the parent project and lists the five modules:
+
+- `discovery-server`
+- `api-gateway`
+- `identity-service`
+- `cv-management-service`
+- `discovery-social-service`
+
+All modules inherit shared dependency versions from the root Maven configuration.
+
+---
+
+## 7. Service Descriptions
+
+### 7.1 Discovery Server
+
+Module: `discovery-server`
+Port: `8761`
+Main class: `DiscoveryServerApplication`
+
+The Discovery Server is the Eureka registry used by the other services. It allows services to register themselves and discover each other by service name instead of hard-coded hostnames.
+
+Main responsibility:
+
+- Start a Eureka server.
+- Provide a service registry dashboard at `http://localhost:8761`.
+- Allow gateway and backend services to discover each other dynamically.
+
+Configuration summary:
+
+```yaml
+server:
+  port: 8761
+
+spring:
+  application:
+    name: discovery-server
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+```
+
+---
+
+### 7.2 API Gateway
+
+Module: `api-gateway`
+Port: `8080`
+Main class: `ApiGatewayApplication`
+
+The API Gateway is the public HTTP entry point. It routes incoming requests to the correct internal service through Eureka service discovery.
+
+Gateway routes:
+
+| External path | Target service |
+| --- | --- |
+| `/api/auth/**` | `identity-service` |
+| `/api/cv/**` | `cv-management-service` |
+| `/api/social/**` | `discovery-social-service` |
+| `/ui/**` | `discovery-social-service` |
+
+This means users can interact with the system through `http://localhost:8080` instead of calling each service directly.
+
+---
+
+### 7.3 Identity Service
+
+Module: `identity-service`
+HTTP port: `8081`
+gRPC port: `9091`
+Database: `auth_db`
+Main class: `IdentityServiceApplication`
+
+The Identity Service owns user account data. It is the source of truth for account status and login validation.
+
+Main responsibilities:
+
+- Register new users.
+- Log users in.
+- Store account records in `auth_db`.
+- Publish user registration events to Kafka.
+- Expose a gRPC account verification method used by the Discovery Social Service.
+- Seed demo users on startup.
+
+Implemented entity:
+
+```text
+UserAccount
+- id
+- email
+- password
+- fullName
+- status
+```
+
+The current implementation stores passwords as plain text. This is documented as a limitation and should be replaced with BCrypt before production use.
+
+Seeded demo users:
+
+| Email | Password | Status |
+| --- | --- | --- |
+| `demo@example.com` | `password` | `ACTIVE` |
+| `yousef@example.com` | `password` | `ACTIVE` |
+
+HTTP endpoints:
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/api/auth/register` | Creates a new user account. |
+| `POST` | `/api/auth/login` | Validates user credentials. Supports JSON and form submissions. |
+
+Kafka publishing:
+
+| Topic | Event | Published when |
+| --- | --- | --- |
+| `user-registration-topic` | `UserRegisteredEvent` | A user is registered. |
+
+`UserRegisteredEvent` fields:
+
+```text
+userId
+email
+fullName
+```
+
+gRPC service:
+
+```protobuf
+service AuthService {
+  rpc VerifyAccount (VerifyRequest) returns (VerifyResponse);
+}
+```
+
+Request:
+
+```text
+VerifyRequest
+- userId
+```
+
+Response:
+
+```text
+VerifyResponse
+- isValid
+- status
+- profileGraph
+```
+
+The implemented gRPC method checks the account in `auth_db`. If the account exists and its status is `ACTIVE`, `isValid` is returned as `true`. Otherwise, the response is invalid and includes the current status, such as `SUSPENDED` or `NOT_FOUND`.
+
+---
+
+### 7.4 CV Management Service
+
+Module: `cv-management-service`
+Port: `8082`
+Database: `cv_db`
+Main class: `CvManagementServiceApplication`
+
+The CV Management Service owns private CV creation and publishing. It stores structured CV documents and emits a complete event when a CV becomes public.
+
+Main responsibilities:
+
+- Save CV drafts.
+- Store structured CV sections.
+- Mark a CV as published.
+- Publish a full CV event to Kafka.
+
+Implemented aggregate:
+
+```text
+CvDocument
+- id
+- userId
+- title
+- fullName
+- summary
+- skills
+- experience
+- education
+- projects
+- languages
+- published
+```
+
+Nested sections:
+
+- `ExperienceSection`
+- `EducationSection`
+- `ProjectSection`
+- `LanguageSection`
+
+The service uses JPA relationships with cascading and orphan removal so nested CV sections are stored with the owning CV document. Hibernate `@Fetch(FetchMode.SUBSELECT)` is used on nested collections to reduce unnecessary query multiplication when loading rich CV graphs.
+
+HTTP endpoints:
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/api/cv/save` | Saves a new CV draft. |
+| `PUT` | `/api/cv/{id}/publish` | Marks the CV as published and emits a Kafka event. |
+
+Kafka publishing:
+
+| Topic | Event | Published when |
+| --- | --- | --- |
+| `cv-published-topic` | `CvPublishedEvent` | A CV is published. |
+
+`CvPublishedEvent` fields:
+
+```text
+cvId
+userId
+title
+fullName
+summary
+skills
+experience
+education
+projects
+languages
+```
+
+---
+
+### 7.5 Discovery Social Service
+
+Module: `discovery-social-service`
+Port: `8083`
+Database: `interaction_db`
+Main class: `DiscoverySocialServiceApplication`
+
+The Discovery Social Service owns the public read side of the application. It consumes Kafka events and builds a local public projection of profiles and published CVs.
+
+Main responsibilities:
+
+- Consume user registration events.
+- Consume CV publication events.
+- Store public CV data in `interaction_db`.
+- Serve the public feed.
+- Render the web UI through Thymeleaf.
+- Check account status through gRPC before returning public CV data.
+
+Kafka consumers:
+
+| Topic | Consumer method | Result |
+| --- | --- | --- |
+| `user-registration-topic` | `consumeUserRegistration` | Creates or updates a local `UserProfile`. |
+| `cv-published-topic` | `consumeCvPublished` | Creates a local `PublicCv` projection. |
+
+REST endpoints:
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/social/feed` | Returns public CVs whose owners are active. |
+| `GET` | `/api/social/cv/{id}` | Returns one public CV if the owner account is active. |
+
+UI endpoints:
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/ui/login` | Displays the login page. |
+| `POST` | `/ui/login` | Logs in through the Identity Service using the gateway. |
+| `GET` | `/ui/dashboard` | Displays the public CV dashboard. |
+| `GET` | `/ui/cv/new` | Displays the CV creation form. |
+| `POST` | `/ui/cv/save` | Saves and publishes a CV through the gateway. |
+| `GET` | `/ui/cv/{id}` | Displays detailed CV information after gRPC verification. |
+
+The UI uses `HttpSession` to store the logged-in user ID and email. When the user submits a CV form, the controller sends a request to the CV Management Service through the API Gateway. After the CV is saved, the UI triggers the publish endpoint.
+
+---
+
+## 8. Data Architecture
+
+The system uses one MySQL container in Docker Compose and separates data by logical database:
+
+| Service | Database | Purpose |
+| --- | --- | --- |
+| `identity-service` | `auth_db` | User accounts and account status. |
+| `cv-management-service` | `cv_db` | Private CV drafts and published CV source data. |
+| `discovery-social-service` | `interaction_db` | Public read model for profiles and CVs. |
+
+This design supports bounded context isolation. Services do not directly query another service's tables. Instead, they exchange data through Kafka events or gRPC requests.
+
+The application currently uses:
+
+```yaml
+spring.jpa.hibernate.ddl-auto: update
+spring.jpa.show-sql: true
+```
+
+This is acceptable for local development and academic demonstration. For production, schema migration should be handled through a migration tool such as Flyway or Liquibase, and SQL logging should be disabled.
+
+---
+
+## 9. Communication Patterns
+
+### 9.1 REST
+
+REST is used for user-facing operations:
+
+- Authentication
+- CV saving
+- CV publishing
+- Feed retrieval
+- UI-backed form workflows
+
+All public routes are available through the API Gateway on port `8080`.
+
+### 9.2 Kafka
+
+Kafka is used for asynchronous state propagation. The project uses two topics:
+
+| Topic | Producer | Consumer |
+| --- | --- | --- |
+| `user-registration-topic` | `identity-service` | `discovery-social-service` |
+| `cv-published-topic` | `cv-management-service` | `discovery-social-service` |
+
+Kafka allows the Discovery Social Service to maintain its own read model without directly querying the Identity or CV Management databases.
+
+### 9.3 gRPC
+
+gRPC is used for real-time account verification. The Discovery Social Service calls the Identity Service through:
+
+```text
+discovery:///identity-service
+```
+
+This address is resolved through Eureka. The gRPC client uses plaintext negotiation in the local Docker environment.
+
+The account verification flow is:
+
+1. A client requests the public feed or a public CV detail page.
+2. Discovery Social Service obtains the CV owner's `userId`.
+3. Discovery Social Service calls `AuthService.VerifyAccount`.
+4. Identity Service checks `auth_db`.
+5. Discovery Social Service returns the CV only if `isValid` is `true`.
+
+The feed is fail-closed. If gRPC verification fails for a user, that user's CVs are filtered out.
+
+---
+
+## 10. User Interface
+
+The web interface is implemented in the Discovery Social Service using Thymeleaf templates and CSS.
+
+Templates:
+
+| Template | Purpose |
+| --- | --- |
+| `login.html` | Login page. |
+| `dashboard.html` | Public CV dashboard and service status view. |
+| `create-cv.html` | Multi-section CV creation form. |
+| `cv-details.html` | Full public CV detail page. |
+| `error-page.html` | Error page for blocked or failed CV access. |
+
+Static asset:
+
+| File | Purpose |
+| --- | --- |
+| `static/css/ui.css` | Styles the UI pages. |
+
+Typical UI workflow:
+
+1. Open `http://localhost:8080/ui/login`.
+2. Log in with `demo@example.com` and `password`, or with `yousef@example.com` and `password`.
+3. Open the dashboard.
+4. Click `Forge New Public Profile`.
+5. Fill in the CV sections.
+6. Submit the form with `Create and Publish CV`.
+7. Return to the dashboard and inspect the published CV.
+
+---
+
+## 11. Containerization and Local Deployment
+
+The project is fully containerized through Docker Compose.
+
+Main command:
+
+```bash
+docker compose up --build
+```
+
+Stop command:
+
+```bash
+docker compose down
+```
+
+Reset all local database data:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+Docker Compose starts:
+
+| Container | Port(s) |
+| --- | --- |
+| `cv-mysql` | `3306` |
+| `cv-zookeeper` | `2181` |
+| `cv-kafka` | `9092`, `29092` |
+| `cv-discovery-server` | `8761` |
+| `cv-api-gateway` | `8080` |
+| `cv-identity-service` | `8081`, `9091` |
+| `cv-management-service` | `8082` |
+| `cv-discovery-social-service` | `8083` |
+
+Each service has a Dockerfile for local Docker Compose builds. These service Dockerfiles use a Maven builder stage followed by an Eclipse Temurin Java 17 runtime stage.
+
+The project also includes `Dockerfile.ci`, which is used only by GitHub Actions. It packages the JAR already built by the CI job into a runtime image. This avoids rebuilding with Maven inside Docker during CI and reduces the risk of Docker Hub image pull failures during pipeline execution.
+
+---
+
+## 12. CI/CD Pipeline
+
+The CI/CD pipeline is defined in:
+
+```text
+.github/workflows/monorepo-cicd.yml
+```
+
+Pipeline name:
+
+```text
+Monorepo Microservices CI/CD to Docker Hub
+```
+
+Triggers:
+
+- Pushes to `main` or `master`.
+- Manual runs through `workflow_dispatch`.
+- Changes inside service folders.
+- Changes to the workflow file itself.
+
+Pipeline jobs:
+
+### 12.1 `detect-changes`
+
+This job checks which services changed using `dorny/paths-filter@v4`.
+
+If the workflow is run manually or the workflow file itself changes, the job builds all services:
+
+```text
+api-gateway
+discovery-server
+identity-service
+cv-management-service
+discovery-social-service
+```
+
+If only a service folder changes, the matrix contains only the changed service.
+
+### 12.2 `validate-dockerhub`
+
+This job checks that the required GitHub repository secrets exist and verifies Docker Hub login.
+
+Required secrets:
+
+```text
+DOCKERHUB_USERNAME
+DOCKERHUB_TOKEN
+```
+
+`DOCKERHUB_USERNAME` must be the Docker Hub username, not an email address. `DOCKERHUB_TOKEN` must be a Docker Hub access token.
+
+### 12.3 `build-and-deploy`
+
+This job runs as a dynamic matrix over the selected services.
+
+For each service, the pipeline:
+
+1. Checks out the repository with `actions/checkout@v6`.
+2. Sets up Java 17 with `actions/setup-java@v5`.
+3. Builds the service with Maven:
+
+```bash
+mvn -B -pl <service-name> -am clean package -DskipTests
+```
+
+4. Copies the built JAR into `.docker-build/<service>/app.jar`.
+5. Builds a Docker image using `Dockerfile.ci`.
+6. Tags the image with `latest` and the Git commit SHA.
+7. Pushes both tags to Docker Hub.
+
+Image naming format:
+
+```text
+DOCKERHUB_USERNAME/service-name:latest
+DOCKERHUB_USERNAME/service-name:<commit-sha>
+```
+
+The workflow uses `fail-fast: false`, so one service failure does not cancel the entire matrix immediately.
+
+---
+
+## 13. Testing and Verification
+
+The project includes unit tests for the major business flows.
+
+### 13.1 Identity Service Tests
+
+File:
+
+```text
+identity-service/src/test/java/com/yousef/cvbuilder/identity/service/IdentityServiceTest.java
+```
+
+Covered behavior:
+
+- Registering a new user creates an active account.
+- Registration publishes a `UserRegisteredEvent`.
+- Duplicate emails are rejected.
+
+### 13.2 CV Management Service Tests
+
+File:
+
+```text
+cv-management-service/src/test/java/com/yousef/cvbuilder/cvmanagement/service/CvManagementServiceTest.java
+```
+
+Covered behavior:
+
+- Saving a draft persists a rich CV graph.
+- Child sections are attached to the parent CV.
+- Publishing a CV sets `published` to `true`.
+- Publishing emits a complete `CvPublishedEvent`.
+
+### 13.3 Discovery Social Service Tests
+
+Files:
+
+```text
+discovery-social-service/src/test/java/com/yousef/cvbuilder/social/service/SocialFeedServiceTest.java
+discovery-social-service/src/test/java/com/yousef/cvbuilder/social/consumer/SocialEventConsumerTest.java
+```
+
+Covered behavior:
+
+- The public feed filters out suspended accounts through gRPC verification.
+- CV details are denied when the owner is suspended.
+- User registration events create local user profiles.
+- CV publication events create full public CV projections.
+
+### 13.4 End-to-End Smoke Test
+
+File:
+
+```text
+scripts/production-smoke-test.sh
+```
+
+The smoke test verifies a full system flow:
+
+1. Waits for service ports.
+2. Registers a new user.
+3. Creates a rich CV document.
+4. Publishes the CV.
+5. Checks the public CV API.
+6. Checks the UI detail page.
+7. Suspends the user directly in MySQL.
+8. Confirms the public CV is blocked with HTTP `403`.
+9. Confirms the suspended CV no longer appears in the feed.
+
+Run command:
+
+```bash
+bash scripts/production-smoke-test.sh
+```
+
+---
+
+## 14. How to Run the Application
+
+### 14.1 Prerequisites
+
+Install:
+
+- Docker Desktop
+- Docker Compose
+- Java 17 and Maven 3.8 or later, if running services outside Docker
+- Bash, curl, and Python 3, if running the smoke test
+
+### 14.2 Clone the Repository
+
+```bash
+git clone https://github.com/YousefBZo/cv-builder.git
+cd cv-builder
+```
+
+### 14.3 Start the Full Stack
+
+```bash
+docker compose up --build
+```
+
+Wait until the Spring services, MySQL, Kafka, and Eureka finish starting.
+
+### 14.4 Open the Application
+
+Login page:
+
+```text
+http://localhost:8080/ui/login
+```
+
+Demo login:
+
+```text
+Email: demo@example.com
+Password: password
+```
+
+Alternative demo login:
+
+```text
+Email: yousef@example.com
+Password: password
+```
+
+### 14.5 Create and Publish a CV
+
+1. Log in.
+2. Open the dashboard.
+3. Click `Forge New Public Profile`.
+4. Complete the CV form.
+5. Click `Create and Publish CV`.
+6. Return to the dashboard and open the published CV.
+
+### 14.6 Useful URLs
+
+| Purpose | URL |
+| --- | --- |
+| Web login | `http://localhost:8080/ui/login` |
+| Dashboard | `http://localhost:8080/ui/dashboard` |
+| Create CV | `http://localhost:8080/ui/cv/new` |
+| Public feed API | `http://localhost:8080/api/social/feed` |
+| Eureka dashboard | `http://localhost:8761` |
+| Identity API | `http://localhost:8080/api/auth/...` |
+| CV API | `http://localhost:8080/api/cv/...` |
+
+---
+
+## 15. API Reference
+
+### 15.1 Identity API
+
+Register:
+
+```bash
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"api.user@example.com","password":"123456","fullName":"API User"}'
+```
+
+Login:
+
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"api.user@example.com","password":"123456"}'
+```
+
+### 15.2 CV Management API
+
+Create a CV draft:
+
+```bash
+curl -X POST http://localhost:8080/api/cv/save \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "USER_ID_FROM_REGISTER",
+    "fullName": "API User",
+    "title": "Backend Developer",
+    "summary": "Spring Boot developer with microservice experience.",
+    "skills": ["Java", "Spring Boot", "Kafka"],
+    "experience": [],
+    "education": [],
+    "projects": [],
+    "languages": []
+  }'
+```
+
+Publish a CV:
+
+```bash
+curl -X PUT http://localhost:8080/api/cv/CV_ID_FROM_SAVE/publish
+```
+
+### 15.3 Discovery Social API
+
+Read the feed:
+
+```bash
+curl http://localhost:8080/api/social/feed
+```
+
+Read one public CV:
+
+```bash
+curl http://localhost:8080/api/social/cv/CV_ID
+```
+
+---
+
+## 16. Security Considerations
+
+The project includes real security-related architecture through gRPC account verification. The Discovery Social Service does not blindly trust its local read model. Before public CV data is returned, it checks the owning account against the Identity Service.
+
+Implemented security-related behavior:
+
+- Public CV access is denied if the owning user is not active.
+- The feed filters inactive or suspended users.
+- gRPC verification is resolved through Eureka.
+- Docker Hub credentials are stored as GitHub repository secrets.
+- CI runtime images use a non-root `spring` user.
+- Kafka JSON deserialization uses trusted package and type mapping configuration.
+
+Current limitations:
+
+- Passwords are stored as plain text.
+- There is no JWT-based authorization.
+- The UI uses a simple server-side session.
+- Database credentials are development defaults.
+- gRPC uses plaintext negotiation in the local environment.
+
+These limitations are acceptable for an academic local demonstration but should be addressed before production deployment.
+
+---
+
+## 17. Work Completed During the Semester
+
+The following work was completed as part of the semester project:
+
+1. Designed a distributed microservices architecture for a CV Builder platform.
+2. Created a Maven monorepo with five Spring Boot modules.
+3. Implemented Eureka service discovery.
+4. Implemented Spring Cloud Gateway path routing.
+5. Implemented Identity Service registration and login.
+6. Implemented demo data seeding for repeatable testing.
+7. Implemented CV draft creation and publish behavior.
+8. Implemented Kafka event publication for user registration and CV publication.
+9. Implemented Discovery Social Service Kafka consumers.
+10. Implemented a persistent public read model in `interaction_db`.
+11. Implemented gRPC account verification between Discovery Social Service and Identity Service.
+12. Implemented fail-closed public feed filtering for inactive accounts.
+13. Implemented Thymeleaf UI pages for login, dashboard, CV creation, details, and error handling.
+14. Implemented Dockerfiles for service containerization.
+15. Implemented Docker Compose orchestration for the full local system.
+16. Implemented unit tests for identity, CV management, feed filtering, and event consumption.
+17. Implemented an end-to-end smoke test script.
+18. Implemented GitHub Actions CI/CD with dynamic service matrix detection.
+19. Implemented Docker Hub authentication and image publishing in CI.
+20. Added a CI-specific runtime Dockerfile to package built JAR artifacts.
+21. Wrote project README usage documentation.
+22. Finalized this formal project documentation.
+
+---
+
+## 18. Known Limitations and Future Work
+
+The implemented system satisfies the main academic and architectural goals, but several improvements would be necessary for production readiness:
+
+1. Replace plain-text passwords with BCrypt hashing.
+2. Add Spring Security and JWT-based authentication.
+3. Move database credentials into environment variables or a secrets manager.
+4. Replace `ddl-auto: update` with Flyway or Liquibase migrations.
+5. Disable SQL logging outside local development.
+6. Add request validation with `jakarta.validation`.
+7. Add API-level error response models instead of returning plain strings or empty bodies.
+8. Add OpenAPI documentation for REST endpoints.
+9. Add service health endpoints with Spring Boot Actuator.
+10. Add centralized logging and tracing.
+11. Add Kafka retry and dead-letter topic handling.
+12. Add TLS for gRPC and public gateway traffic.
+13. Add role-based authorization for administrative actions such as account suspension.
+14. Add pagination and search to the public feed.
+15. Add production deployment manifests for a cloud platform or Kubernetes.
+
+---
+
+## 19. Conclusion
+
+The CV Builder application demonstrates a complete microservices system built with Spring Boot, Kafka, gRPC, Eureka, MySQL, Docker, and GitHub Actions. The project covers both functional requirements, such as creating and publishing CVs, and architectural requirements, such as service isolation, event-driven synchronization, synchronous security checks, containerized deployment, and automated CI/CD.
+
+The most important architectural decision is the combination of Kafka and gRPC. Kafka allows the public discovery service to maintain a fast local read model without coupling directly to the CV Management database. gRPC provides the immediate account validation needed to prevent suspended or inactive users from remaining visible in the public feed. Together, these patterns show how asynchronous and synchronous communication can be used in the same system for different types of requirements.
+
+Overall, the project represents a full semester of work on distributed system design, backend implementation, container orchestration, automated delivery, testing, and formal documentation.

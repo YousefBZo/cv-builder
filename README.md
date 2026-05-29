@@ -1,3 +1,5 @@
+# BY YOUSEF ZAQOUT
+
 # CV Builder
 
 CV Builder is a Spring Boot microservices project for creating, publishing, and browsing public CV profiles. It is built as a Maven monorepo with five services, service discovery through Eureka, asynchronous updates through Kafka, MySQL storage, and a small Thymeleaf UI for the public CV flow.
